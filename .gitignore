@@ -1,0 +1,11 @@
+.env*
+
+# Python
+venv
+__pycache__
+
+# Javascript
+node_modules
+
+# Convex
+convex/_generated

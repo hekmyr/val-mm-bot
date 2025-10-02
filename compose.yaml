@@ -1,0 +1,10 @@
+services:
+  bot:
+    build: .
+    env_file: .env.local
+    restart: unless-stopped
+    develop:
+      watch:
+        - path: ./bot
+          action: rebuild
+
