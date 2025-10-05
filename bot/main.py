@@ -4,7 +4,7 @@ import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 
-load_dotenv(".env.local") 
+_ = load_dotenv(".env.local")
 
 CONVEX_URL = os.getenv("CONVEX_URL")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -16,7 +16,7 @@ bot = commands.Bot(intents=intents, command_prefix=None)
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
+    _ = await bot.tree.sync()
     print(f"✅ Logged in as {bot.user}")
 
 async def setup():
@@ -31,6 +31,8 @@ def validate():
 
 def main():
     asyncio.run(setup())
+    if not DISCORD_BOT_TOKEN:
+        raise ValueError("BAD_PROJECT_CONFIGURATION")
     bot.run(DISCORD_BOT_TOKEN)
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ defineSchema({
   teams: defineTable({
     name: v.string(),
     captainId: v.id("users"),
+    hasFirstPick: v.boolean(),
     updateTime: v.number()
   }),
   players: defineTable({
