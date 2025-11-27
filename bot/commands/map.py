@@ -14,17 +14,17 @@ from bot.lib.exceptions import handle_exception
 from bot.lib.log import log
 
 # Store veto state machines in memory (match_id -> VetoStateMachine)
-veto_states = {}
+veto_states: dict[str, VetoStateMachine] = {}
 
 
 class Map(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     group = app_commands.Group(name="map", description="Map related commands")
 
     @group.command(name="list", description="List available maps")
-    async def list(self, interaction: discord.Interaction):
+    async def list(self, interaction: discord.Interaction) -> None:
         try:
             active_maps = MapsServiceImpl.get_active_maps()
             map_list = "\n".join([f"• {m['name']}" for m in active_maps])
@@ -34,7 +34,7 @@ class Map(commands.Cog):
 
     @group.command(name="ban", description="Ban a map")
     @app_commands.describe(map_name="Map to ban")
-    async def ban(self, interaction: discord.Interaction, map_name: str):
+    async def ban(self, interaction: discord.Interaction, map_name: str) -> None:
         try:
             # Get match from thread
             thread_id = str(interaction.channel.id) if interaction.channel else None
@@ -99,7 +99,7 @@ class Map(commands.Cog):
 
     @group.command(name="pick", description="Pick a map or side")
     @app_commands.describe(map_name="Map to pick or side (ATK/DEF)")
-    async def pick(self, interaction: discord.Interaction, map_name: str):
+    async def pick(self, interaction: discord.Interaction, map_name: str) -> None:
         try:
             # Get match from thread
             thread_id = str(interaction.channel.id) if interaction.channel else None
@@ -186,6 +186,6 @@ class Map(commands.Cog):
             await handle_exception(interaction, e)
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Map(bot))
 

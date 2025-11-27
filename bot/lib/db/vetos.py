@@ -1,15 +1,22 @@
+from typing import TypedDict
 from bot.lib.convex_client import client
 from bot.lib.log import log
+from bot.lib.veto_manager import VetoAction
 import time
+
+
+class VetoStep(TypedDict):
+    team_id: str
+    action: VetoAction
+    order: int
 
 
 class VetosServiceImpl:
 
     @staticmethod
     def create(match_id: str, team_id: str, action: str, order: int) -> str:
-        """Create a veto action, returns veto ID"""
         try:
-            result = client.mutation(
+            result: str = client.mutation(
                 "vetos:create",
                 {
                     "matchId": match_id,
@@ -26,8 +33,7 @@ class VetosServiceImpl:
             raise
 
     @staticmethod
-    def create_batch(match_id: str, veto_sequence: list[dict]) -> list[str]:
-        """Create multiple vetos from sequence"""
+    def create_batch(match_id: str, veto_sequence: list[VetoStep]) -> list[str]:
         result_ids = []
         for veto_step in veto_sequence:
             veto_id = VetosServiceImpl.create(

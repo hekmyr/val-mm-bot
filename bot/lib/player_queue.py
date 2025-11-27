@@ -1,4 +1,3 @@
-from typing import Any
 from bot.lib.constants import PLAYER_REQUIRED, READY_TIMEOUT
 import asyncio
 import random
@@ -7,15 +6,12 @@ import discord
 from discord import Member, User
 from bot.lib.db.db import db
 from bot.lib.db.maps import MapsServiceImpl
-from bot.lib.db.map_selections import MapSelectionsServiceImpl
-from bot.lib.exceptions import BotException, handle_exception2
+from bot.lib.db.users import UserDto
+from bot.lib.exceptions import BotException
 from bot.lib.log import log
 from bot.lib.team_balancer import TeamBalancer
 from bot.lib.mock import MockUser, MockTeamBalancer, MockReady
 from bot.lib.test_constants import TEST_USER_IDS
-
-PLAYER_REQUIRED = 10
-READY_TIMEOUT = 30
 
 class PlayerContext:
     bot: discord.Client | None = None
@@ -30,7 +26,7 @@ class PlayerContext:
         return PlayerContext._user_id_to_best_of.get(user_id)
 
     @staticmethod
-    def add_player(user: User | Member, bestof: int):
+    def add_player(user: User | Member, bestof: int) -> int:
         if user.id in PlayerContext.users:
             old_bestof = PlayerContext.get_user_best_of(user.id)
             if old_bestof == bestof:
@@ -52,7 +48,7 @@ class PlayerContext:
         return player_count
 
     @staticmethod
-    def _peek_current_batch_ids(bestOf: int):
+    def _peek_current_batch_ids(bestOf: int) -> list[int]:
         match bestOf:
             case 1:
                 return PlayerContext._best_of_1[-PLAYER_REQUIRED:]
@@ -60,7 +56,7 @@ class PlayerContext:
                 raise BotException("INVALID_BESTOF")
 
     @staticmethod
-    def removePlayer(id: int):
+    def removePlayer(id: int) -> None:
         bestOf = PlayerContext._user_id_to_best_of.get(id)
         match bestOf:
             case 1:
@@ -69,7 +65,7 @@ class PlayerContext:
                 raise BotException("INVALID_BESTOF")
 
     @staticmethod
-    async def trigger_queue(bestOf: int):
+    async def trigger_queue(bestOf: int) -> None:
         match bestOf:
             case 1:
                 await PlayerContext._triggerQueueBo1()
@@ -77,7 +73,7 @@ class PlayerContext:
                 await PlayerContext._triggerQueueBo1()
 
     @staticmethod
-    async def _triggerQueueBo1():
+    async def _triggerQueueBo1() -> None:
         players = PlayerContext._best_of_1[-PLAYER_REQUIRED:]
         if len(players) < PLAYER_REQUIRED:
             raise BotException("NOT_ENOUGH_PLAYERS")
@@ -89,7 +85,7 @@ class PlayerContext:
         PlayerContext._active_ready_checks[1] = task
 
     @staticmethod
-    async def _ready_timeout(bestof: int, player_ids: list[int]):
+    async def _ready_timeout(bestof: int, player_ids: list[int]) -> None:
         await asyncio.sleep(READY_TIMEOUT)
 
         # MOCK: Auto-mark test users as ready for testing
@@ -126,7 +122,7 @@ class PlayerContext:
                 await PlayerContext.trigger_queue(bestof)
 
     @staticmethod
-    def _get_ready_set(bestof: int):
+    def _get_ready_set(bestof: int) -> set[int]:
         match bestof:
             case 1:
                 return PlayerContext._best_of_1_ready
@@ -134,7 +130,7 @@ class PlayerContext:
                 return set[int]()
 
     @staticmethod
-    def _removePlayerBo1(id: int):
+    def _removePlayerBo1(id: int) -> None:
         if id in PlayerContext._best_of_1:
             PlayerContext._best_of_1.remove(id)
         if id in PlayerContext._user_id_to_best_of:
@@ -143,7 +139,7 @@ class PlayerContext:
             del PlayerContext.users[id]
 
     @staticmethod
-    async def send_ready_check(playerIds: list[int]):
+    async def send_ready_check(playerIds: list[int]) -> None:
         for id in playerIds:
             log(f"Sending ready check to player {id}")
             user = PlayerContext.users[id]
@@ -156,7 +152,7 @@ class PlayerContext:
                 raise BotException("USER_NOT_FOUND")
 
     @staticmethod
-    async def set_player_as_ready(id: int):
+    async def set_player_as_ready(id: int) -> int:
         best_of = PlayerContext._user_id_to_best_of.get(id)
         if best_of is None:
             raise BotException("PLAYER_NOT_IN_QUEUE")
@@ -168,7 +164,7 @@ class PlayerContext:
                 raise BotException("PLAYER_NOT_ELIGIBLE")
 
     @staticmethod
-    async def _set_player_as_ready_bo1(id: int):
+    async def _set_player_as_ready_bo1(id: int) -> int:
         bestOf = 1
         playerIds = PlayerContext._peek_current_batch_ids(bestOf)
         if id not in playerIds:
@@ -180,25 +176,25 @@ class PlayerContext:
         return len(PlayerContext._best_of_1_ready)
 
     @staticmethod
-    def status(user: User | Member):
+    def status(user: User | Member) -> None:
         _ = user
         pass
 
     @staticmethod
-    def list_players(bestOf: int):
+    def list_players(bestOf: int) -> None:
         _ = bestOf
         pass
 
     @staticmethod
-    def _find_best_of(id: int):
+    def _find_best_of(id: int) -> int:
         return PlayerContext._user_id_to_best_of.get(id, 1)
 
     @staticmethod
-    def find_best_of(id: int):
+    def find_best_of(id: int) -> int:
         return PlayerContext._find_best_of(id)
 
     @staticmethod
-    def _find_ready_players(bestOf: int):
+    def _find_ready_players(bestOf: int) -> list[int]:
         batch = PlayerContext._peek_current_batch_ids(bestOf)
         match bestOf:
             case 1:
@@ -208,11 +204,11 @@ class PlayerContext:
         return [pid for pid in batch if pid in ready]
 
     @staticmethod
-    def find_ready_players(bestOf: int):
+    def find_ready_players(bestOf: int) -> list[int]:
         return PlayerContext._find_ready_players(bestOf)
 
     @staticmethod
-    async def create_match(discord_ids: list[int], best_of: int):
+    async def create_match(discord_ids: list[int], best_of: int) -> None:
 
         log(f"Creating match with {len(discord_ids)} players (Best of {best_of})")
 
@@ -240,7 +236,7 @@ class PlayerContext:
         log(f"Captains: {team1_captain_did} vs {team2_captain_did}")
         log(f"First pick: {'Team A' if team_a_first_pick else 'Team B'}")
 
-        discord_id_to_user_dto: dict[int, Any] = {}
+        discord_id_to_user_dto: dict[int, UserDto] = {}
         for did in discord_ids:
             user = PlayerContext.users.get(did)
             if user:
@@ -444,7 +440,7 @@ class PlayerContext:
                                     log(f"Created voice channels: {team1_voice.id}, {team2_voice.id}, {common_voice.id}")
                                     
                                     # Schedule automatic deletion after 2 hours
-                                    async def delete_voice_channels():
+                                    async def delete_voice_channels() -> None:
                                         await asyncio.sleep(2 * 60 * 60)  # 2 hours
                                         try:
                                             await team1_voice.delete(reason="Match ended - 2 hour limit")

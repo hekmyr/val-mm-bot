@@ -7,7 +7,6 @@ class MapSelectionsServiceImpl:
 
     @staticmethod
     def create(veto_id: str, map_id: str) -> str:
-        """Create a map selection for a veto, returns selection ID"""
         try:
             result = client.mutation(
                 "mapSelections:create",

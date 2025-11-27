@@ -7,7 +7,6 @@ class PlayersServiceImpl:
 
     @staticmethod
     def create(team_id: str, user_id: str) -> str:
-        """Add a player to a team, returns player ID"""
         try:
             result = client.mutation(
                 "players:create",
@@ -25,7 +24,6 @@ class PlayersServiceImpl:
 
     @staticmethod
     def create_batch(team_id: str, user_ids: list[str]) -> list[str]:
-        """Add multiple players to a team"""
         result_ids = []
         for user_id in user_ids:
             result_id = PlayersServiceImpl.create(team_id, user_id)

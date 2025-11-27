@@ -1,5 +1,6 @@
 import asyncio
 import re
+from typing import TypedDict
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -8,31 +9,36 @@ from bot.lib.db.teams import TeamsServiceImpl
 from bot.lib.db.users import UsersServiceImpl
 from bot.lib.log import log
 
-pending_scores: dict[str, dict] = {}
+class PendingScore(TypedDict):
+    by: str
+    score: str
+    task: asyncio.Task[None]
+
+pending_scores: dict[str, PendingScore] = {}
 
 score_re = re.compile(r"^\s*(\d{1,2})\s*[-:]\s*(\d{1,2})\s*$")
 
-def parse_score(s: str):
+def parse_score(s: str) -> tuple[int, int] | None:
     m = score_re.match(s)
     if not m:
         return None
     return int(m.group(1)), int(m.group(2))
 
-async def _cleanup_after(match_id: str, delay: int = 30):
+async def _cleanup_after(match_id: str, delay: int = 30) -> None:
     await asyncio.sleep(delay)
     if match_id in pending_scores:
         log(f"Score pending expired for match {match_id}")
         pending_scores.pop(match_id, None)
 
 class Game(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     group = app_commands.Group(name="game", description="Game related commands")
 
     @group.command(name="score", description="Submit game score as <t1>-<t2> in a match thread (captains only)")
     @app_commands.describe(score="Format like 13-9")
-    async def score(self, interaction: discord.Interaction, score: str):
+    async def score(self, interaction: discord.Interaction, score: str) -> None:
         try:
             thread_id = str(interaction.channel.id) if interaction.channel else None
             if not thread_id:
@@ -95,5 +101,5 @@ class Game(commands.Cog):
             log(f"Error handling /game score: {e}")
             await interaction.response.send_message("❌ Failed to submit score", ephemeral=True)
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Game(bot))

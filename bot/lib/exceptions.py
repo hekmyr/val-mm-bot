@@ -27,7 +27,7 @@ class BotException(Exception):
         "USER_NOT_FOUND": "User not found in queue.",
     }
 
-    def __init__(self, code: str):
+    def __init__(self, code: str) -> None:
         if code not in self.VALID_CODES:
             raise ValueError(f"Invalid error code: {code}")
         self.code = code
