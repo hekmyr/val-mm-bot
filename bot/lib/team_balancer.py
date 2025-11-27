@@ -22,7 +22,6 @@ class TeamBalancer:
     
     @staticmethod
     def pick_captain(player_ids: list[int]) -> int:
-        """Pick a random captain from players"""
         return random.choice(player_ids)
     
     @staticmethod

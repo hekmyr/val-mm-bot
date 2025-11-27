@@ -7,7 +7,6 @@ class SideSelectionsServiceImpl:
 
     @staticmethod
     def create(veto_id: str, side: str) -> str:
-        """Create a side selection for a veto, returns selection ID"""
         try:
             result = client.mutation(
                 "sideSelections:create",

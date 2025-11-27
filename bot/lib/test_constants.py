@@ -1,4 +1,4 @@
-"""Shared constants and data structures for the bot"""
+# Shared constants and data structures for the bot
 
 # Test user IDs for development/testing
 TEST_USER_IDS = [

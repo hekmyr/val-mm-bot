@@ -19,26 +19,26 @@ bot = commands.Bot(intents=intents, command_prefix="/")
 
 
 @bot.event
-async def on_ready():
+async def on_ready() -> None:
     _ = await bot.tree.sync()
     log(f"✅ Logged in as {bot.user}")
 
-async def setup():
+async def setup() -> None:
     await bot.load_extension("bot.commands.queue")
     await bot.load_extension("bot.commands.map")
     await bot.load_extension("bot.commands.leaderboard")
 
-def validate():
+def validate() -> None:
     for var in [ CONVEX_URL, DISCORD_BOT_TOKEN, DISCORD_MATCH_THREAD_CHANNEL_ID ]:
         if not var:
             raise BotException("BAD_PROJECT_CONFIGURATION")
 
-def initialize_maps():
+def initialize_maps() -> None:
     isValid = MapsServiceImpl.validate()
     if not isValid:
         raise BotException("MAPS_VALIDATION_FAILED")
 
-def main():
+def main() -> None:
     validate()
     initialize_maps()
     asyncio.run(setup())

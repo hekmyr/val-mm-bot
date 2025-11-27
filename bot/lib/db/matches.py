@@ -1,25 +1,37 @@
+from typing import TypedDict
 from bot.lib.convex_client import client
 from bot.lib.log import log
 import time
 
 
+class MatchDto(TypedDict):
+    _id: str
+    _creationTime: float
+    team1: str
+    team2: str
+    bestOf: int
+    threadId: str | None
+    status: str
+    team1Score: int | None
+    team2Score: int | None
+    updateTime: int
+
+
 class MatchesServiceImpl:
 
     @staticmethod
-    def find_by_id(match_id: str) -> dict:
-        """Get match by ID"""
+    def find_by_id(match_id: str) -> MatchDto | None:
         try:
-            result = client.query("matches:findById", {"matchId": match_id})
+            result: MatchDto | None = client.query("matches:findById", {"matchId": match_id})
             return result
         except Exception as e:
             log(f"Error fetching match {match_id}: {e}")
             raise
 
     @staticmethod
-    def find_by_thread_id(thread_id: str) -> dict:
-        """Get match by Discord thread ID"""
+    def find_by_thread_id(thread_id: str) -> MatchDto | None:
         try:
-            result = client.query("matches:findByThreadId", {"threadId": thread_id})
+            result: MatchDto | None = client.query("matches:findByThreadId", {"threadId": thread_id})
             return result
         except Exception as e:
             log(f"Error fetching match by thread {thread_id}: {e}")
@@ -27,19 +39,19 @@ class MatchesServiceImpl:
 
     @staticmethod
     def create(team1_id: str, team2_id: str, best_of: int) -> str:
-        """Create a match, returns match ID"""
         try:
-            result = client.mutation(
+            status = "in_progress" if best_of == 1 else "veto_phase"
+            result: str = client.mutation(
                 "matches:create",
                 {
                     "team1": team1_id,
                     "team2": team2_id,
                     "bestOf": best_of,
-                    "status": "veto_phase",
+                    "status": status,
                     "updateTime": int(time.time() * 1000)
                 }
             )
-            log(f"Match created: {team1_id} vs {team2_id} (BO{best_of})")
+            log(f"Match created: {team1_id} vs {team2_id} (BO{best_of}) status={status}")
             return result
         except Exception as e:
             log(f"Error creating match: {e}")
@@ -47,7 +59,6 @@ class MatchesServiceImpl:
 
     @staticmethod
     def update_thread_id(match_id: str, thread_id: str) -> None:
-        """Update match with Discord thread ID"""
         try:
             client.mutation(
                 "matches:updateThreadId",
@@ -64,7 +75,6 @@ class MatchesServiceImpl:
 
     @staticmethod
     def update_status(match_id: str, status: str) -> None:
-        """Update match status"""
         try:
             client.mutation(
                 "matches:updateStatus",
