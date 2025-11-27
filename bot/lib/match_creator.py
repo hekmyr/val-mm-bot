@@ -49,9 +49,11 @@ class MatchCreator:
                 if user_dto:
                     result[did] = user_dto
                 else:
+                    log(f"User DTO not found for Discord ID: {did}")
                     raise BotException("USER_NOT_FOUND")
             except Exception:
-                raise BotException("USER_NOT_FOUND")
+                    log(f"User DTO not found for Discord ID: {did}")
+                    raise BotException("USER_NOT_FOUND")
         return result
 
     @staticmethod

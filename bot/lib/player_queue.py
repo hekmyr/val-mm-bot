@@ -1,17 +1,13 @@
 from bot.lib.constants import PLAYER_REQUIRED, READY_TIMEOUT
 import asyncio
-import random
 import os
 import discord
 from discord import Member, User
-from bot.lib.db.db import db
-from bot.lib.db.maps import MapsServiceImpl
-from bot.lib.db.users import UserDto
 from bot.lib.exceptions import BotException
 from bot.lib.log import log
-from bot.lib.team_balancer import TeamBalancer
-from bot.lib.mock import MockUser, MockTeamBalancer, MockReady
+from bot.lib.mock import MockUser, MockReady
 from bot.lib.test_constants import TEST_USER_IDS
+from bot.lib.match_creator import MatchCreator
 
 class PlayerContext:
     bot: discord.Client | None = None
@@ -196,11 +192,12 @@ class PlayerContext:
     @staticmethod
     def _find_ready_players(bestOf: int) -> list[int]:
         batch = PlayerContext._peek_current_batch_ids(bestOf)
+        ready = set[int]()
         match bestOf:
             case 1:
                 ready = PlayerContext._best_of_1_ready
             case _:
-                ready = set()
+                pass
         return [pid for pid in batch if pid in ready]
 
     @staticmethod
@@ -212,270 +209,82 @@ class PlayerContext:
 
         log(f"Creating match with {len(discord_ids)} players (Best of {best_of})")
 
-        # Generate team names
-        team1_name = TeamBalancer.generate_team_name()
-        team2_name = TeamBalancer.generate_team_name()
-
-        # MOCK: Balance teams - MOCK VERSION
-        team1_player_ids, team2_player_ids = MockTeamBalancer.balance_teams_mock(discord_ids)
-
-        # Original: team1_player_ids, team2_player_ids = TeamBalancer.balance_teams(player_ids)
-
-        # MOCK: Pick captains - MOCK VERSION
-        team1_captain_did = MockTeamBalancer.pick_captain_mock(team1_player_ids)
-        team2_captain_did = MockTeamBalancer.pick_captain_mock(team2_player_ids)
-
-        # team1_captain_id = TeamBalancer.pick_captain(team1_player_ids)
-        # team2_captain_id = TeamBalancer.pick_captain(team2_player_ids)
-
-        # MOCK: Random first pick - MOCK VERSION
-        team_a_first_pick = MockTeamBalancer.get_first_pick_mock()
-        # Original: team_a_first_pick = random.choice([True, False])
+        team1_name, team2_name = MatchCreator.generate_team_names()
+        team1_ids, team2_ids = MatchCreator.balance_teams(discord_ids)
+        team1_captain_did, team2_captain_did = MatchCreator.pick_captains(team1_ids, team2_ids)
+        team_a_first_pick = MatchCreator.decide_first_pick()
 
         log(f"Teams: {team1_name} vs {team2_name}")
         log(f"Captains: {team1_captain_did} vs {team2_captain_did}")
         log(f"First pick: {'Team A' if team_a_first_pick else 'Team B'}")
 
-        discord_id_to_user_dto: dict[int, UserDto] = {}
-        for did in discord_ids:
-            user = PlayerContext.users.get(did)
-            if user:
-                try:
-                    user_dto = db.users.find_by_discord_id(user.id)
-                    discord_id_to_user_dto[did] = user_dto
-                except Exception as e:
-                    raise BotException(f"USER_NOT_FOUND")
-
         try:
-            team1_captain_user_dto = discord_id_to_user_dto.get(team1_captain_did)
-            if not team1_captain_user_dto:
-                # Use first available player from team1
-                for did in team1_player_ids:
-                    if did in discord_id_to_user_dto.discordId:
-                        team1_captain_user_dto = discord_id_to_user_dto[did]
-                        break
-            
-            team2_captain_user_dto = discord_id_to_user_dto.get(team2_captain_did)
-            if not team2_captain_user_dto:
-                # Use first available player from team2
-                for did in team2_player_ids:
-                    if did in discord_id_to_user_dto:
-                        team2_captain_user_dto = discord_id_to_user_dto[did]
-                        break
-            
-            team1_db_id = db.teams.create(
-                name=team1_name,
-                captain_id=team1_captain_user_dto.id,
-                has_first_pick=team_a_first_pick
+            discord_id_to_user_dto = MatchCreator.fetch_user_dtos(discord_ids)
+            team1_captain_dto = MatchCreator.resolve_captain_dto(
+                team1_captain_did,
+                team1_ids,
+                discord_id_to_user_dto
             )
-            team2_db_id = db.teams.create(
-                name=team2_name,
-                captain_id=team2_captain_user_dto.id,
-                has_first_pick=not team_a_first_pick
+            team2_captain_dto = MatchCreator.resolve_captain_dto(
+                team2_captain_did,
+                team2_ids,
+                discord_id_to_user_dto
             )
-            log(f"Teams saved to DB: {team1_db_id} vs {team2_db_id}")
-        except Exception as e:
-            raise BotException("FAILED_TO_CREATE_TEAMS") from e
-
-        try:
-            match_db_id = db.matches.create(
-                team1_id=team1_db_id,
-                team2_id=team2_db_id,
-                best_of=best_of
+            team1_id, team2_id = MatchCreator.create_teams_in_db(
+                team1_name,
+                team2_name,
+                team1_captain_dto,
+                team2_captain_dto,
+                team_a_first_pick
             )
-            log(f"Match saved to DB: {match_db_id}")
+            match_db_id = MatchCreator.create_match_record_and_initial_vetos(
+                team1_id,
+                team2_id,
+                best_of
+            )
+            MatchCreator.add_players_to_teams(
+                team1_ids,
+                team2_ids,
+                discord_id_to_user_dto,
+                team1_id,
+                team2_id
+            )
 
-            selected_map = None
-            if best_of == 1 and match_db_id and team1_db_id:
-                try:
-                    active_maps = MapsServiceImpl.get_active_maps()
-                    selected_map = random.choice(active_maps)
-                    log(f"BO1 decider selected: {selected_map['name']} (mapId={selected_map['_id']})")
-                except Exception as e:
-                    raise BotException("FAILED_TO_SELECT_MAP") from e
-        except Exception as e:
-            raise BotException("FAILED_TO_CREATE_MATCH") from e
+            if PlayerContext.bot:
+                channel_id = int(os.getenv("DISCORD_MATCH_THREAD_CHANNEL_ID", "0"))
+                thread_url = await MatchCreator.create_and_populate_thread(
+                    PlayerContext.bot,
+                    channel_id,
+                    team1_name,
+                    team2_name,
+                    team1_ids,
+                    team2_ids,
+                    PlayerContext.users,
+                    team1_captain_did,
+                    team2_captain_did,
+                    team_a_first_pick,
+                    match_db_id
+                )
 
-        # TODO: Can't we create our teams with players directly?
-        try:
-            for did in team1_player_ids:
-                if did in discord_id_to_user_dto:
-                    db.players.create(
-                        team_id=team1_db_id,
-                        user_id=discord_id_to_user_dto[did]
-                    )
-            for did in team2_player_ids:
-                if did in discord_id_to_user_dto:
-                    db.players.create(
-                        team_id=team2_db_id,
-                        user_id=discord_id_to_user_dto[did]
-                    )
-        except Exception as e:
-            raise BotException("FAILED_TO_ADD_PLAYERS_TO_TEAMS") from e
+                category_id = int(os.getenv("DISCORD_MATCH_CATEGORY_ID", "0"))
+                await MatchCreator.create_voice_channels(
+                    PlayerContext.bot,
+                    category_id,
+                    team1_name,
+                    team2_name,
+                    match_db_id
+                )
 
-        thread_url = None
-        try:
-            channel_id = int(os.getenv("DISCORD_MATCH_THREAD_CHANNEL_ID", "0"))
-            if channel_id == 0:
-                log("DISCORD_MATCH_THREAD_CHANNEL_ID is not set; skipping thread creation")
+                await MatchCreator.notify_players(
+                    discord_ids,
+                    PlayerContext.users,
+                    best_of,
+                    team1_name,
+                    team2_name,
+                    thread_url
+                )
             else:
-                bot_client = PlayerContext.bot
-                if isinstance(bot_client, discord.Client):
-                    channel = bot_client.get_channel(channel_id)
-                    if channel is None:
-                        try:
-                            channel = await bot_client.fetch_channel(channel_id)
-                        except Exception:
-                            channel = None
-                    if channel and isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
-                        match_id_short = match_db_id[:6] if match_db_id else "XXXXXX"
-                        thread_name = f"{team1_name} vs {team2_name} (BO{best_of}) | MATCH ID: {match_id_short}"
-                        if isinstance(channel, discord.TextChannel):
-                            # Create a private thread from the channel
-                            thread = await channel.create_thread(
-                                name=thread_name,
-                                type=discord.ChannelType.private_thread,
-                                invitable=False
-                            )
-                        else:
-                            # Forum: create a post directly as thread
-                            thread = await channel.create_thread(name=thread_name, content="Match thread")
-                        
-                        # Store thread URL for notifications
-                        thread_url = f"https://discord.com/channels/{channel.guild.id}/{thread.id}"
-                        
-                        # Add bot to thread (for private threads)
-                        try:
-                            if isinstance(thread, discord.Thread) and bot_client.user:
-                                await thread.add_user(bot_client.user)
-                        except Exception as e:
-                            log(f"Could not add bot to thread: {e}")
-                        
-                        # Add members
-                        for did in discord_ids:
-                            member = PlayerContext.users.get(did)
-                            if isinstance(member, (discord.User, discord.Member)):
-                                try:
-                                    await thread.add_user(member)
-                                except Exception:
-                                    pass
-                        
-                        # Post match details in the thread
-                        try:
-                            # Build team rosters with mentions
-                            team1_roster = []
-                            for did in team1_player_ids:
-                                member = PlayerContext.users.get(did)
-                                if member:
-                                    captain_marker = " 👑" if did == team1_captain_did else ""
-                                    # Handle both real Discord users and MockUsers
-                                    if hasattr(member, 'mention'):
-                                        team1_roster.append(f"{member.mention}{captain_marker}")
-                                    else:
-                                        team1_roster.append(f"<@{did}>{captain_marker}")
-                            
-                            team2_roster = []
-                            for did in team2_player_ids:
-                                member = PlayerContext.users.get(did)
-                                if member:
-                                    captain_marker = " 👑" if did == team2_captain_did else ""
-                                    # Handle both real Discord users and MockUsers
-                                    if hasattr(member, 'mention'):
-                                        team2_roster.append(f"{member.mention}{captain_marker}")
-                                    else:
-                                        team2_roster.append(f"<@{did}>{captain_marker}")
-                            
-                            first_pick_team = team1_name if team_a_first_pick else team2_name
-                            map_line = f"**Map:** {selected_map['name']}" if selected_map else ""
-                            
-                            match_message = f"""# 🎮 Match Started!
-## Best of {best_of}
-
-### **{team1_name}**
-{chr(10).join(team1_roster)}
-
-### **{team2_name}**
-{chr(10).join(team2_roster)}
-
-**First Pick:** {first_pick_team}
-{map_line}
-**Match ID:** `{match_id_short}`"""
-                            
-                            await thread.send(match_message)
-                        except Exception as e:
-                            log(f"Error posting match details to thread: {e}")
-                        
-                        # Persist thread ID
-                        try:
-                            await db.matches.update_thread_id(match_db_id, str(thread.id))
-                        except Exception as e:
-                            log(f"Failed to save thread id: {e}")
-                        
-                        # Create voice channels for the match
-                        try:
-                            category_id = int(os.getenv("DISCORD_MATCH_CATEGORY_ID", "0"))
-                            if category_id > 0 and channel.guild:
-                                category = bot_client.get_channel(category_id)
-                                if category is None:
-                                    try:
-                                        category = await bot_client.fetch_channel(category_id)
-                                    except Exception:
-                                        category = None
-                                
-                                if category and isinstance(category, discord.CategoryChannel):
-                                    # Create team voice channels
-                                    team1_voice = await channel.guild.create_voice_channel(
-                                        name=f"{team1_name}",
-                                        category=category
-                                    )
-                                    team2_voice = await channel.guild.create_voice_channel(
-                                        name=f"{team2_name}",
-                                        category=category
-                                    )
-                                    common_voice = await channel.guild.create_voice_channel(
-                                        name=f"Common Chat | {team1_name} | {team2_name}",
-                                        category=category
-                                    )
-                                    
-                                    log(f"Created voice channels: {team1_voice.id}, {team2_voice.id}, {common_voice.id}")
-                                    
-                                    # Schedule automatic deletion after 2 hours
-                                    async def delete_voice_channels() -> None:
-                                        await asyncio.sleep(2 * 60 * 60)  # 2 hours
-                                        try:
-                                            await team1_voice.delete(reason="Match ended - 2 hour limit")
-                                            await team2_voice.delete(reason="Match ended - 2 hour limit")
-                                            await common_voice.delete(reason="Match ended - 2 hour limit")
-                                            log(f"Deleted voice channels for match {match_id_short}")
-                                        except Exception as e:
-                                            log(f"Error deleting voice channels: {e}")
-                                    
-                                    _ = asyncio.create_task(delete_voice_channels())
-                                    
-                                    # Post voice channel links in thread
-                                    voice_message = f"\n\n**Voice Channels:**\n{team1_voice.mention}\n{team2_voice.mention}\n{common_voice.mention}"
-                                    await thread.send(voice_message)
-                                else:
-                                    log("Category channel not found or invalid")
-                            else:
-                                log("DISCORD_MATCH_CATEGORY_ID not set; skipping voice channel creation")
-                        except Exception as e:
-                            log(f"Error creating voice channels: {e}")
-                    else:
-                        log("Configured DISCORD_MATCH_THREAD_CHANNEL_ID not found or invalid type")
-                else:
-                    log("Discord client not available to create thread")
+                log("PlayerContext.bot is None, skipping Discord operations")
         except Exception as e:
-            log(f"Error creating private thread: {e}")
-
-        # Notify players
-        for did in discord_ids:
-            user = PlayerContext.users.get(did)
-            if user:
-                try:
-                    message = f"Match created! Best of {best_of}\nTeam A: {team1_name}\nTeam B: {team2_name}"
-                    if thread_url:
-                        message += f"\n\nJoin the match thread: {thread_url}"
-                    _ = await user.send(message)
-                except:
-                    pass
+            log(f"Error during match creation: {e}")
+            raise BotException("MATCH_CREATION_FAILED") from e
