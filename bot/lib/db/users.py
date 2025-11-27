@@ -1,29 +1,27 @@
+from typing import Any
 from discord import Member, User
 from bot.lib.convex_client import client
+from bot.lib.exceptions import BotException
 from bot.lib.log import log
 
 
 class UsersServiceImpl:
 
     @staticmethod
-    def find_by_id(user_id: str) -> dict:
-        """Get user by Convex ID"""
+    def find_by_id(user_id: str):
         try:
-            result = client.query("users:findById", {"userId": user_id})
+            result: None | Any = client.query("users:findById", {"userId": user_id})
             return result
         except Exception as e:
-            log(f"Error fetching user {user_id}: {e}")
-            raise
+            raise BotException("USER_NOT_FOUND")
 
     @staticmethod
-    def find_by_discord_id(discord_id: str) -> dict:
-        """Get user by Discord ID"""
+    def find_by_discord_id(discord_id: int):
         try:
-            result = client.query("users:findByDiscordId", {"discordId": discord_id})
+            result: None | Any = client.query("users:findByDiscordId", {"discordId": discord_id})
             return result
         except Exception as e:
-            log(f"Error fetching user by Discord ID {discord_id}: {e}")
-            raise
+            raise BotException("USER_NOT_FOUND")
 
     @staticmethod
     def createOrFind(user: User | Member) -> int:

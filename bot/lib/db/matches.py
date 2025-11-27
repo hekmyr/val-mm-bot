@@ -27,19 +27,19 @@ class MatchesServiceImpl:
 
     @staticmethod
     def create(team1_id: str, team2_id: str, best_of: int) -> str:
-        """Create a match, returns match ID"""
         try:
+            status = "in_progress" if best_of == 1 else "veto_phase"
             result = client.mutation(
                 "matches:create",
                 {
                     "team1": team1_id,
                     "team2": team2_id,
                     "bestOf": best_of,
-                    "status": "veto_phase",
+                    "status": status,
                     "updateTime": int(time.time() * 1000)
                 }
             )
-            log(f"Match created: {team1_id} vs {team2_id} (BO{best_of})")
+            log(f"Match created: {team1_id} vs {team2_id} (BO{best_of}) status={status}")
             return result
         except Exception as e:
             log(f"Error creating match: {e}")

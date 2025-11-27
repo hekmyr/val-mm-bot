@@ -17,20 +17,16 @@ class Queue(commands.Cog):
     @group.command(name="join", description="Join queue")
     @app_commands.choices(best_of=[
         app_commands.Choice(name="1", value=1),
-        app_commands.Choice(name="3", value=3),
-        app_commands.Choice(name="5", value=5)
     ])
     async def join(self, interaction: discord.Interaction, best_of: int = 1):
         try:
-            if best_of not in [1, 3, 5]:
+            if best_of not in [1]:
                 best_of = 1
-            
+ 
             try:
-                await interaction.user.send("You will receive ready checks here, before the game start.")
+                _ = await interaction.user.send("You will receive ready checks here, before the game start.")
             except discord.Forbidden:
-                await interaction.response.send_message(
-                    "I cannot send you DMs. Please enable DMs from server members in your privacy settings.\n"
-                    "Go to Server Settings → Content & Social -> Social permissions -> Direct Messages",
+                _ = await interaction.response.send_message("I cannot send you DMs. Please enable DMs from server members in your privacy settings.\nGo to Server Settings → Content & Social -> Social permissions -> Direct Messages",
                     ephemeral=True
                 )
                 return
