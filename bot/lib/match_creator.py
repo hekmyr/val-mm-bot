@@ -93,10 +93,20 @@ class MatchCreator:
             raise BotException("FAILED_TO_CREATE_TEAMS") from e
 
     @staticmethod
-    def create_match_record_and_initial_vetos(team1_db_id: str, team2_db_id: str, best_of: int) -> str:
+    def create_match_record(team1_db_id: str, team2_db_id: str, best_of: int) -> str:
         try:
             match_db_id = db.matches.create(team1_db_id, team2_db_id, best_of)
             log(f"Match saved to DB: {match_db_id}")
+            return match_db_id
+        except Exception as e:
+            log(f"Error creating match record: {e}")
+            raise BotException("FAILED_TO_CREATE_MATCH") from e
+
+    @staticmethod
+    def start_veto(match_db_id: str, team1_db_id: str, best_of: int) -> tuple[str | None, str | None]:
+        try:
+            map_name = None
+            side_pick = None
 
             if best_of == 1 and match_db_id and team1_db_id:
                 try:
@@ -104,18 +114,26 @@ class MatchCreator:
                     if not active_maps:
                         raise BotException("NO_ACTIVE_MAPS")
                     selected = random.choice(active_maps)
-                    _ = db.vetos.create(match_db_id, team1_db_id, "decider", 1)
+                    veto_id = db.vetos.create(match_db_id, team1_db_id, "decider", 1)
+                    _ = db.map_selections.create(veto_id, selected.get('_id'))
                     log(f"BO1 decider selected: {selected.get('name')} (mapId={selected.get('_id')})")
+                    map_name = selected.get('name')
+
+                    side = random.choice(["ATK", "DEF"])
+                    side_veto_id = db.vetos.create(match_db_id, team1_db_id, "side_pick", 2)
+                    _ = db.side_selections.create(side_veto_id, side)
+                    log(f"BO1 side selected: {side}")
+                    side_pick = side
                 except BotException:
                     raise
                 except Exception as e:
                     log(f"Failed to select map or create veto: {e}")
                     raise BotException("FAILED_TO_SELECT_MAP") from e
 
-            return match_db_id
+            return map_name, side_pick
         except Exception as e:
-            log(f"Error creating match record: {e}")
-            raise BotException("FAILED_TO_CREATE_MATCH") from e
+            log(f"Error starting veto: {e}")
+            raise BotException("FAILED_TO_START_VETO") from e
 
     @staticmethod
     def add_players_to_teams(
@@ -167,6 +185,8 @@ class MatchCreator:
         team2_captain_did: int,
         team_a_first_pick: bool,
         match_db_id: str | None,
+        map_name: str | None = None,
+        side: str | None = None,
     ) -> str | None:
         if channel_id <= 0:
             log("DISCORD_MATCH_THREAD_CHANNEL_ID not set; skipping thread creation")
@@ -217,7 +237,9 @@ class MatchCreator:
                     + f"## Best of 1\n\n"
                     + f"### **{team1_name}**\n" + "\n".join(team1_roster) + "\n\n"
                     + f"### **{team2_name}**\n" + "\n".join(team2_roster) + "\n\n"
-                    + f"**First Pick:** {first_pick_team}\n"
+                    + (f"**Map:** {map_name}\n" if map_name else "")
+                    + (f"**ATTACK:** {team1_name if side == 'ATK' else team2_name}\n" if side else "")
+                    + (f"**DEFENSE:** {team2_name if side == 'ATK' else team1_name}\n" if side else "")
                     + f"**Match ID:** `{match_id_short}`"
                 )
                 _ = await thread.send(match_message)
