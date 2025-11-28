@@ -275,9 +275,14 @@ class PlayerContext:
                 team2_captain_dto,
                 team_a_first_pick
             )
-            match_db_id = MatchCreator.create_match_record_and_initial_vetos(
+            match_db_id = MatchCreator.create_match_record(
                 team1_id,
                 team2_id,
+                best_of
+            )
+            map_name, side_pick = MatchCreator.start_veto(
+                match_db_id,
+                team1_id,
                 best_of
             )
             MatchCreator.add_players_to_teams(
@@ -301,7 +306,9 @@ class PlayerContext:
                     team1_captain_did,
                     team2_captain_did,
                     team_a_first_pick,
-                    match_db_id
+                    match_db_id,
+                    map_name,
+                    side_pick
                 )
 
                 category_id = int(os.getenv("DISCORD_MATCH_CATEGORY_ID", "0"))
