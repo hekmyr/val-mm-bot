@@ -1,13 +1,51 @@
-from bot.lib.constants import PLAYER_REQUIRED, READY_TIMEOUT
 import asyncio
 import os
+
 import discord
 from discord import Member, User
+
+from bot.lib.constants import PLAYER_REQUIRED, READY_TIMEOUT
 from bot.lib.exceptions import BotException
 from bot.lib.log import log
-from bot.lib.mock import MockUser, MockReady
-from bot.lib.test_constants import TEST_USER_IDS
 from bot.lib.match_creator import MatchCreator
+from bot.lib.test_constants import TEST_USER_IDS
+
+
+class MockUser:
+    def __init__(self, user_id: int) -> None:
+        self.id = user_id
+        self.name = f"test_user_{user_id}"
+        self.mention = f"<@{user_id}>"
+
+    async def send(self, message: str) -> None:
+        log(f"[MOCK] Sending DM to user {self.id}: {message}")
+        return None
+
+
+class MockReady:
+    @staticmethod
+    def auto_ready_mock_users(bestof: int) -> None:
+        match bestof:
+            case 1:
+                ready_set = PlayerContext._best_of_1_ready
+            case 3:
+                ready_set = getattr(PlayerContext, "_best_of_3_ready", None)
+            case 5:
+                ready_set = getattr(PlayerContext, "_best_of_5_ready", None)
+            case _:
+                return
+
+        if ready_set is None:
+            return
+
+        # Add all test users to ready set
+        for user_id in TEST_USER_IDS:
+            ready_set.add(user_id)
+
+        log(
+            f"[MOCK] Auto-marked {len(TEST_USER_IDS)} test users as ready for BO{bestof}"
+        )
+
 
 class PlayerContext:
     bot: discord.Client | None = None

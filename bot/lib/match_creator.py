@@ -104,8 +104,14 @@ class MatchCreator:
                     if not active_maps:
                         raise BotException("NO_ACTIVE_MAPS")
                     selected = random.choice(active_maps)
-                    _ = db.vetos.create(match_db_id, team1_db_id, "decider", 1)
+                    veto_id = db.vetos.create(match_db_id, team1_db_id, "decider", 1)
+                    _ = db.map_selections.create(veto_id, selected.get('_id'))
                     log(f"BO1 decider selected: {selected.get('name')} (mapId={selected.get('_id')})")
+
+                    side = random.choice(["ATK", "DEF"])
+                    side_veto_id = db.vetos.create(match_db_id, team1_db_id, "side_pick", 2)
+                    _ = db.side_selections.create(side_veto_id, side)
+                    log(f"BO1 side selected: {side}")
                 except BotException:
                     raise
                 except Exception as e:
