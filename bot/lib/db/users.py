@@ -21,15 +21,15 @@ class UsersServiceImpl:
             result: UserDto | None = client.query("users:findById", {"userId": user_id})
             return result
         except Exception as e:
-            raise BotException("USER_NOT_FOUND")
+            raise BotException("USER_NOT_FOUND") from e
 
     @staticmethod
     def find_by_discord_id(discord_id: int) -> UserDto | None:
         try:
-            result: UserDto | None = client.query("users:findByDiscordId", {"discordId": discord_id})
+            result: UserDto | None = client.query("users:findByDiscordId", {"discordId": str(discord_id)})
             return result
         except Exception as e:
-            raise BotException("USER_NOT_FOUND")
+            raise BotException("USER_NOT_FOUND") from e
 
     @staticmethod
     def createOrFind(user: User | Member) -> int:
@@ -41,8 +41,6 @@ class UsersServiceImpl:
                     "username": user.name
                 }
             )
-            log(f"User {user.name} (ID: {user.id}) created/found")
             return result
         except Exception as e:
-            log(f"Error creating/finding user {user.id}: {e}")
             raise
